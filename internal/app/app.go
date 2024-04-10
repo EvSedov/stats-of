@@ -14,7 +14,13 @@ import (
 	"stats-of/internal/healthz"
 )
 
-var appInfo = &entities.AppInfo{}
+var appInfo = &entities.AppInfo{
+	Name:         "stats-of",
+	BuildVersion: "0.0.1",
+	BuildTime:    "Wed, 10 Apr 2024 22:25:51",
+	GitTag:       "no git tag",
+	GitHash:      "no git hash",
+}
 
 type App struct {
 	server *http.Server

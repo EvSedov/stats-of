@@ -25,7 +25,7 @@ func MakeHandler(info *entities.AppInfo) func(w http.ResponseWriter, r *http.Req
 			GitTag:       info.GitTag,
 			GitHash:      info.GitHash,
 		}
-		err := utils.SuccessRespondWith200(w, struct{}{})
+		err := utils.SuccessRespondWith200(w, response)
 		if err != nil {
 			fmt.Printf("failed to decode response = %v, error = %v\n", response, err)
 		}
