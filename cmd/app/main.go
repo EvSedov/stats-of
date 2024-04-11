@@ -2,27 +2,28 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"stats-of/internal/app"
 	"stats-of/internal/config"
+	"stats-of/internal/logger"
 )
 
 func main() {
-	fmt.Println("reading config...")
+	logger.InitLogger()
+	logger.Log.Info("reading config...")
 	config, err := config.LoadFromEnv()
 	if err != nil {
-		fmt.Println("failed to read config")
+		logger.Log.Info("failed to read config")
 		os.Exit(1)
 	}
 
 	serverCtx, serverStopCtx := context.WithCancel(context.Background())
 	app, err := app.New(config)
 	if err != nil {
-		fmt.Println("failed to read config")
+		logger.Log.Info("failed to read config")
 		os.Exit(1)
 	}
 
@@ -34,7 +35,7 @@ func main() {
 
 	err = app.Run()
 	if err != nil {
-		fmt.Println("failed to read config")
+		logger.Log.Info("failed to read config")
 		os.Exit(1)
 	}
 
