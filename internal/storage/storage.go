@@ -67,3 +67,14 @@ func (rs *RedisService) FindKeysByPattern(pattern string) ([]string, error) {
 
 	return keys, nil
 }
+
+func (rs *RedisService) FindKeyByGetRequest(key string) (string, error) {
+	// Используем метод Get клиента Redis для получения значения по ключу
+	result, err := rs.Client.Get(key).Result()
+	if err != nil {
+		// Если произошла ошибка, возвращаем пустую строку и саму ошибку
+		return "", err
+	}
+	// Возвращаем результат и nil в качестве ошибки, если всё прошло успешно
+	return result, nil
+}
