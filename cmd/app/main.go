@@ -17,16 +17,13 @@ func main() {
 	logger.InitLogger()
 	logger.Log.Info("reading config...")
 	// ---------------------------------------------------
-	rdb := storage.InitDb()
-	pattern := "*chat:77541*"
-	keys, err := storage.FindKeysByPattern(rdb, pattern)
+	redisService := storage.NewRedisService()
+	keys, err := redisService.FindKeysByPattern("*pattern*")
 	if err != nil {
-		logger.Log.Error("Ошибка при поиске ключей", zap.Error(err))
+		logger.Log.Fatal("Ошибка при поиске ключей", zap.Error(err))
 	}
-
-	// Вывод результатов
 	for _, key := range keys {
-		logger.Log.Info(key)
+		logger.Log.Info("Найден ключ", zap.String("key", key))
 	}
 	// ---------------------------------------------------
 
