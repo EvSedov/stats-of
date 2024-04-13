@@ -4,16 +4,32 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"syscall"
-
 	"stats-of/internal/app"
 	"stats-of/internal/config"
 	"stats-of/internal/logger"
+	"stats-of/internal/storage"
+	"syscall"
+
+	"go.uber.org/zap"
 )
 
 func main() {
 	logger.InitLogger()
 	logger.Log.Info("reading config...")
+	// ---------------------------------------------------
+	rdb := storage.InitDb()
+	pattern := "*chat:77541*"
+	keys, err := storage.FindKeysByPattern(rdb, pattern)
+	if err != nil {
+		logger.Log.Error("Ошибка при поиске ключей", zap.Error(err))
+	}
+
+	// Вывод результатов
+	for _, key := range keys {
+		logger.Log.Info(key)
+	}
+	// ---------------------------------------------------
+
 	config, err := config.LoadFromEnv()
 	if err != nil {
 		logger.Log.Info("failed to read config")
