@@ -2,8 +2,10 @@ package redis
 
 import (
 	"context"
+	"stats-of/internal/logger"
 
 	"github.com/go-redis/redis"
+	"go.uber.org/zap"
 )
 
 type (
@@ -24,9 +26,13 @@ func NewRedisClient(opt *Options) *Storage {
 	return &Storage{Client: client}
 }
 
-func (r *Storage) Ping(ctx context.Context) (err error) {
-	err = r.Ping(ctx)
-	return err
+func (r *Storage) Ping(ctx context.Context) error {
+	result, err := r.Client.Ping().Result() // Использование Ping из библиотеки go-redis
+	if err != nil {
+		return err
+	}
+	logger.Log.Info("Redis Ping Response", zap.String("response", result))
+	return nil
 }
 
 // FindKeysByPattern метод для поиска ключей в Redis по шаблону
@@ -49,12 +55,15 @@ func (r *Storage) FindKeysByPattern(pattern string) ([]string, error) {
 }
 
 func (r *Storage) FindKeyByGetRequest(key string) (string, error) {
-	// Используем метод Get клиента Redis для получения значения по ключу
 	result, err := r.Client.Get(key).Result()
-	if err != nil {
-		// Если произошла ошибка, возвращаем пустую строку и саму ошибку
+	if err == redis.Nil {
+		// Ключ не найден
+		logger.Log.Info("Ключ не найден", zap.String("key", key))
+		return "", nil // Возвращаем пустую строку без ошибки, если такое поведение приемлемо
+	} else if err != nil {
+		// Произошла другая ошибка
 		return "", err
 	}
-	// Возвращаем результат и nil в качестве ошибки, если всё прошло успешно
+	// Возвращаем результат, если ключ найден и ошибок нет
 	return result, nil
 }

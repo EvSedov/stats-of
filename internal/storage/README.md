@@ -2,24 +2,44 @@
 
 ```go
 // ---------------------------------------------------
-redisService := storage.NewRedisService()
-keys, err := redisService.FindKeysByPattern("*pattern*")
-if err != nil {
-  logger.Log.Fatal("Ошибка при поиске ключей", zap.Error(err))
-}
+opts, err := redis.CreateOptions()
+	if err != nil {
+		logger.Log.Fatal("Не удалось загрузить настройки Redis", zap.Error(err))
+	}
 
-for _, key := range keys {
-  logger.Log.Info("Найден ключ", zap.String("key", key))
-}
-key := "chat:5481:user:121190002:type:CHANNEL"
+	// Создание клиента Redis
+	redisClient := redis.NewRedisClient(opts)
 
-// Получение значения по ключу
-value, err := storage.NewRedisService().FindKeyByGetRequest(key)
-if err != nil {
-  logger.Log.Fatal("Ошибка при получении значения из Redis", zap.Error(err))
-}
+	// Пример использования: Пинг до Redis для проверки соединения
+	err = redisClient.Ping(context.Background())
+	if err != nil {
+		logger.Log.Fatal("Ошибка соединения с Redis", zap.Error(err))
+	} else {
+		logger.Log.Info("Успешное соединение с Redis")
+	}
 
-// Вывод полученного значения
-logger.Log.Info("Полученное значение", zap.String("value", value))
+	// Использование FindKeysByPattern для поиска ключей по шаблону
+	pattern := "*Pattern*" // Можно заменить на любой другой шаблон
+	keys, err := redisClient.FindKeysByPattern(pattern)
+	if err != nil {
+		logger.Log.Fatal("Ошибка при поиске ключей", zap.Error(err))
+	}
+
+	// Логгирование найденных ключей
+	for _, key := range keys {
+		logger.Log.Info("Найден ключ", zap.String("key", key))
+	}
+
+	key := "key"
+
+	// Получение значения по ключу
+	value, err := redisClient.FindKeyByGetRequest(key)
+	if err != nil {
+		logger.Log.Fatal("Ошибка при получении значения из Redis", zap.Error(err))
+	} else if value == "" {
+		logger.Log.Info("Ключ не найден", zap.String("key", key))
+	} else {
+		logger.Log.Info("Полученное значение", zap.String("key", key), zap.String("value", value))
+	}
 // ---------------------------------------------------
 ```
