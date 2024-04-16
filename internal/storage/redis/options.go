@@ -26,9 +26,9 @@ func CreateOptions() (opt *Options, err error) {
 
 	addr := os.Getenv("REDIS_ADDR")
 	password := os.Getenv("REDIS_PASSWORD")
-	dbStr := os.Getenv("REDIS_DB")
+	rdbStr := os.Getenv("REDIS_DB")
 
-	db, err := strconv.Atoi(dbStr)
+	rdb, err := strconv.Atoi(rdbStr)
 	if err != nil {
 		logger.Log.Fatal("Ошибка при преобразовании REDIS_DB в число", zap.Error(err))
 		return nil, err
@@ -37,6 +37,6 @@ func CreateOptions() (opt *Options, err error) {
 	return &Options{
 		Addr:     addr,
 		Password: password,
-		DB:       db,
+		DB:       rdb,
 	}, nil
 }
