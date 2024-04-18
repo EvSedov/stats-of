@@ -57,20 +57,32 @@ func (r *Storage) Ping(ctx context.Context) error {
 
 // FindKeysByPattern метод для поиска ключей в Redis по шаблону
 func (r *Storage) FindKeysByPattern(pattern string) ([]string, error) {
+	// Логирование начала операции
+	logger.Log.Info("Starting key search by pattern", zap.String("pattern", pattern))
+
 	var cursor uint64
 	var keys []string
 	for {
+		// Выполнение команды SCAN для поиска ключей
 		k, nextCursor, err := r.Client.Scan(cursor, pattern, 0).Result()
 		if err != nil {
+			logger.Log.Error("Failed to scan keys", zap.Error(err))
 			return nil, err
 		}
+
 		keys = append(keys, k...)
 		cursor = nextCursor
+
+		// Логирование промежуточных результатов
+		logger.Log.Info("Batch of keys fetched", zap.Strings("keys", k), zap.Uint64("nextCursor", nextCursor))
+
 		if cursor == 0 {
 			break
 		}
 	}
 
+	// Логирование успешного завершения операции
+	logger.Log.Info("Key search completed", zap.Int("totalKeys", len(keys)))
 	return keys, nil
 }
 
