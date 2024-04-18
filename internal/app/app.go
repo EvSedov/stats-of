@@ -8,10 +8,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"stats-of/internal/config"
 	"stats-of/internal/entities"
 	"stats-of/internal/healthz"
+	"stats-of/internal/logger"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 )
 
 var appInfo = &entities.AppInfo{
@@ -27,6 +30,9 @@ type App struct {
 }
 
 func New(config *config.Config) (*App, error) {
+	// Логирование начала создания нового экземпляра приложения
+	logger.Log.Info("Initializing new application instance", zap.Int("ServerPort", config.ServerPort))
+
 	const (
 		defaultHTTPServerWriteTimeout = time.Second * 15
 		defaultHTTPServerReadTimeout  = time.Second * 15
@@ -44,6 +50,11 @@ func New(config *config.Config) (*App, error) {
 		WriteTimeout: defaultHTTPServerWriteTimeout,
 		ReadTimeout:  defaultHTTPServerReadTimeout,
 	}
+
+	// Логирование завершения инициализации сервера
+	logger.Log.Info("HTTP server configured", zap.String("address", app.server.Addr),
+		zap.Duration("writeTimeout", app.server.WriteTimeout),
+		zap.Duration("readTimeout", app.server.ReadTimeout))
 
 	return app, nil
 }
