@@ -4,25 +4,43 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"stats-of/internal/logger"
+
+	"go.uber.org/zap"
 )
 
 func RespondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
+	// Логирование попытки преобразования payload в JSON
+	logger.Log.Info("Attempting to marshal payload to JSON", zap.Any("payload", payload))
+
 	response, err := json.Marshal(payload)
 	if err != nil {
-		respondErr := RespondWithError(w,
-			http.StatusInternalServerError,
-			http.StatusText(http.StatusInternalServerError))
+		// Логирование ошибки маршалинга
+		logger.Log.Error("Failed to marshal payload", zap.Error(err))
+
+		// Попытка отправить ответ об ошибке
+		respondErr := RespondWithError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		if respondErr != nil {
+			// Логирование ошибки при отправке HTTP ответа об ошибке
+			logger.Log.Error("Failed to send error response", zap.Error(respondErr))
 			return err
 		}
 		return fmt.Errorf("failed to marshall payload: %w", err)
 	}
 
+	// Установка заголовков ответа
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
+
+	// Отправка JSON ответа
 	if _, err = w.Write(response); err != nil {
+		// Логирование ошибки при записи ответа
+		logger.Log.Error("Failed to write JSON response", zap.Error(err))
 		return fmt.Errorf("failed to write response: %w", err)
 	}
+
+	// Логирование успешной отправки ответа
+	logger.Log.Info("JSON response sent successfully", zap.Int("statusCode", code), zap.ByteString("response", response))
 	return nil
 }
 
