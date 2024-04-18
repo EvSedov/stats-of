@@ -38,10 +38,19 @@ func NewRedisClient(opt *Options) *Storage {
 }
 
 func (r *Storage) Ping(ctx context.Context) error {
-	result, err := r.Client.Ping().Result() // Использование Ping из библиотеки go-redis
+	// Логирование перед отправкой запроса
+	logger.Log.Info("Sending ping to Redis")
+
+	// Отправка ping и получение результата
+	result, err := r.Client.Ping().Result()
+
+	// Логирование ошибки, если она произошла
 	if err != nil {
+		logger.Log.Error("Failed to ping Redis", zap.Error(err))
 		return err
 	}
+
+	// Логирование успешного получения ответа
 	logger.Log.Info("Redis Ping Response", zap.String("response", result))
 	return nil
 }
