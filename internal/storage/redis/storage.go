@@ -87,15 +87,20 @@ func (r *Storage) FindKeysByPattern(pattern string) ([]string, error) {
 }
 
 func (r *Storage) FindKeyByGetRequest(key string) (string, error) {
+	// Логирование попытки получения значения по ключу
+	logger.Log.Info("Attempting to retrieve key", zap.String("key", key))
+
 	result, err := r.Client.Get(key).Result()
 	if err == redis.Nil {
-		// Ключ не найден
-		logger.Log.Info("Ключ не найден", zap.String("key", key))
+		// Логирование отсутствия ключа
+		logger.Log.Info("Key not found", zap.String("key", key))
 		return "", nil // Возвращаем пустую строку без ошибки, если такое поведение приемлемо
 	} else if err != nil {
-		// Произошла другая ошибка
+		// Логирование ошибки при попытке получить ключ
+		logger.Log.Error("Error retrieving key", zap.String("key", key), zap.Error(err))
 		return "", err
 	}
-	// Возвращаем результат, если ключ найден и ошибок нет
+	// Логирование успешного получения значения
+	logger.Log.Info("Key retrieved successfully", zap.String("key", key), zap.String("value", result))
 	return result, nil
 }
