@@ -45,13 +45,26 @@ func RespondWithJSON(w http.ResponseWriter, code int, payload interface{}) error
 }
 
 func RespondWithError(w http.ResponseWriter, code int, message string) error {
-	return RespondWithJSON(w,
+	// Логирование попытки отправить ошибочный ответ
+	logger.Log.Info("Attempting to respond with error", zap.Int("statusCode", code), zap.String("errorMessage", message))
+
+	err := RespondWithJSON(w,
 		code,
 		struct {
 			Error string `json:"error"`
 		}{
 			Error: message,
 		})
+
+	if err != nil {
+		// Логирование ошибки при попытке отправить JSON ответ об ошибке
+		logger.Log.Error("Failed to respond with error JSON", zap.Error(err))
+		return err
+	}
+
+	// Логирование успешной отправки ошибочного ответа
+	logger.Log.Info("Error response sent successfully", zap.Int("statusCode", code))
+	return nil
 }
 
 func RespondWith400(w http.ResponseWriter, message string) error {
