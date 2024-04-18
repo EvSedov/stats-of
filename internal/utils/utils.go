@@ -68,31 +68,46 @@ func RespondWithError(w http.ResponseWriter, code int, message string) error {
 }
 
 func RespondWith400(w http.ResponseWriter, message string) error {
-	return RespondWithError(w,
-		http.StatusBadRequest,
-		message)
+	logger.Log.Info("Responding with 400 Bad Request", zap.String("message", message))
+	err := RespondWithError(w, http.StatusBadRequest, message)
+	if err != nil {
+		logger.Log.Error("Failed to send 400 response", zap.Error(err))
+	}
+	return err
 }
 
 func RespondWith404(w http.ResponseWriter) error {
-	return RespondWithError(w,
-		http.StatusNotFound,
-		http.StatusText(http.StatusNotFound))
+	logger.Log.Info("Responding with 404 Not Found")
+	err := RespondWithError(w, http.StatusNotFound, http.StatusText(http.StatusNotFound))
+	if err != nil {
+		logger.Log.Error("Failed to send 404 response", zap.Error(err))
+	}
+	return err
 }
 
 func RespondWith500(w http.ResponseWriter) error {
-	return RespondWithError(w,
-		http.StatusInternalServerError,
-		http.StatusText(http.StatusInternalServerError))
+	logger.Log.Info("Responding with 500 Internal Server Error")
+	err := RespondWithError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+	if err != nil {
+		logger.Log.Error("Failed to send 500 response", zap.Error(err))
+	}
+	return err
 }
 
 func SuccessRespondWith200(w http.ResponseWriter, payload interface{}) error {
-	return RespondWithJSON(w,
-		http.StatusOK,
-		payload)
+	logger.Log.Info("Responding with 200 OK", zap.Any("payload", payload))
+	err := RespondWithJSON(w, http.StatusOK, payload)
+	if err != nil {
+		logger.Log.Error("Failed to send 200 response", zap.Error(err))
+	}
+	return err
 }
 
-func SuccessRepondWith201(w http.ResponseWriter, payload interface{}) error {
-	return RespondWithJSON(w,
-		http.StatusCreated,
-		payload)
+func SuccessRespondWith201(w http.ResponseWriter, payload interface{}) error {
+	logger.Log.Info("Responding with 201 Created", zap.Any("payload", payload))
+	err := RespondWithJSON(w, http.StatusCreated, payload)
+	if err != nil {
+		logger.Log.Error("Failed to send 201 response", zap.Error(err))
+	}
+	return err
 }
