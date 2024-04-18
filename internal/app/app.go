@@ -76,11 +76,18 @@ func (a *App) Run() error {
 }
 
 func (a *App) stop(ctx context.Context) error {
+	// Логирование начала процесса остановки сервера
+	logger.Log.Info("Initiating server shutdown")
+
 	err := a.server.Shutdown(ctx)
 	if err != nil {
+		// Логирование ошибки при попытке остановить сервер
+		logger.Log.Error("Error during server shutdown", zap.Error(err))
 		return fmt.Errorf("server was shutdown with error: %w", err)
 	}
 
+	// Логирование успешного завершения остановки сервера
+	logger.Log.Info("Server shutdown successfully")
 	return nil
 }
 
