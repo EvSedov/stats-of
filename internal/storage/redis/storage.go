@@ -23,6 +23,17 @@ func NewRedisClient(opt *Options) *Storage {
 		DB:       opt.DB,
 	})
 
+	// Логирование при создании клиента
+	logger.Log.Info("Creating new Redis client", zap.String("address", opt.Addr), zap.Int("db", opt.DB))
+
+	// Проверка соединения с Redis
+	_, err := client.Ping().Result()
+	if err != nil {
+		logger.Log.Error("Failed to connect to Redis", zap.Error(err))
+	} else {
+		logger.Log.Info("Connected to Redis successfully")
+	}
+
 	return &Storage{Client: client}
 }
 
