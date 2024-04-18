@@ -60,11 +60,18 @@ func New(config *config.Config) (*App, error) {
 }
 
 func (a *App) Run() error {
+	// Логирование попытки запуска сервера
+	logger.Log.Info("Starting HTTP server", zap.String("address", a.server.Addr))
+
 	err := a.server.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {
-		return fmt.Errorf("server was stop with err: %w", err)
+		// Логирование ошибки, если сервер не был закрыт нормально
+		logger.Log.Error("HTTP server stopped with error", zap.Error(err))
+		return fmt.Errorf("server was stopped with error: %w", err)
 	}
 
+	// Логирование нормального закрытия сервера
+	logger.Log.Info("HTTP server stopped gracefully")
 	return nil
 }
 
