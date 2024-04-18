@@ -92,22 +92,33 @@ func (a *App) stop(ctx context.Context) error {
 }
 
 func (a *App) GracefulStop(serverCtx context.Context, sig <-chan os.Signal, serverStopCtx context.CancelFunc) {
-	<-sig
+	logger.Log.Info("Waiting for stop signal")
+	<-sig // Ожидание сигнала
+
+	// Логирование получения сигнала
+	logger.Log.Info("Stop signal received, initiating graceful shutdown")
+
 	var timeOut = 30 * time.Second
 	shutdownCtx, shutdownStopCtx := context.WithTimeout(serverCtx, timeOut)
 
 	go func() {
 		<-shutdownCtx.Done()
 		if shutdownCtx.Err() == context.DeadlineExceeded {
+			// Логирование исчерпания времени ожидания
+			logger.Log.Error("Shutdown timed out, forcing exit")
 			os.Exit(1)
 		}
 	}()
 
 	err := a.stop(shutdownCtx)
 	if err != nil {
+		// Логирование ошибки при попытке остановить сервер
+		logger.Log.Error("Error during server shutdown", zap.Error(err))
 		os.Exit(1)
 	}
 
-	serverStopCtx()
-	shutdownStopCtx()
+	// Логирование успешного завершения процесса остановки
+	logger.Log.Info("Server shutdown completed successfully")
+	serverStopCtx()   // Остановка контекста сервера
+	shutdownStopCtx() // Остановка контекста тайм-аута
 }
