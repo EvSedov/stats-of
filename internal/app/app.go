@@ -8,10 +8,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"stats-of/internal/config"
 	"stats-of/internal/entities"
 	"stats-of/internal/healthz"
+	"stats-of/internal/logger"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 )
 
 var appInfo = &entities.AppInfo{
@@ -27,6 +30,9 @@ type App struct {
 }
 
 func New(config *config.Config) (*App, error) {
+	// Логирование начала создания нового экземпляра приложения
+	logger.Log.Info("Initializing new application instance", zap.Int("ServerPort", config.ServerPort))
+
 	const (
 		defaultHTTPServerWriteTimeout = time.Second * 15
 		defaultHTTPServerReadTimeout  = time.Second * 15
@@ -45,44 +51,74 @@ func New(config *config.Config) (*App, error) {
 		ReadTimeout:  defaultHTTPServerReadTimeout,
 	}
 
+	// Логирование завершения инициализации сервера
+	logger.Log.Info("HTTP server configured", zap.String("address", app.server.Addr),
+		zap.Duration("writeTimeout", app.server.WriteTimeout),
+		zap.Duration("readTimeout", app.server.ReadTimeout))
+
 	return app, nil
 }
 
 func (a *App) Run() error {
+	// Логирование попытки запуска сервера
+	logger.Log.Info("Starting HTTP server", zap.String("address", a.server.Addr))
+
 	err := a.server.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {
-		return fmt.Errorf("server was stop with err: %w", err)
+		// Логирование ошибки, если сервер не был закрыт нормально
+		logger.Log.Error("HTTP server stopped with error", zap.Error(err))
+		return fmt.Errorf("server was stopped with error: %w", err)
 	}
 
+	// Логирование нормального закрытия сервера
+	logger.Log.Info("HTTP server stopped gracefully")
 	return nil
 }
 
 func (a *App) stop(ctx context.Context) error {
+	// Логирование начала процесса остановки сервера
+	logger.Log.Info("Initiating server shutdown")
+
 	err := a.server.Shutdown(ctx)
 	if err != nil {
+		// Логирование ошибки при попытке остановить сервер
+		logger.Log.Error("Error during server shutdown", zap.Error(err))
 		return fmt.Errorf("server was shutdown with error: %w", err)
 	}
 
+	// Логирование успешного завершения остановки сервера
+	logger.Log.Info("Server shutdown successfully")
 	return nil
 }
 
 func (a *App) GracefulStop(serverCtx context.Context, sig <-chan os.Signal, serverStopCtx context.CancelFunc) {
-	<-sig
+	logger.Log.Info("Waiting for stop signal")
+	<-sig // Ожидание сигнала
+
+	// Логирование получения сигнала
+	logger.Log.Info("Stop signal received, initiating graceful shutdown")
+
 	var timeOut = 30 * time.Second
 	shutdownCtx, shutdownStopCtx := context.WithTimeout(serverCtx, timeOut)
 
 	go func() {
 		<-shutdownCtx.Done()
 		if shutdownCtx.Err() == context.DeadlineExceeded {
+			// Логирование исчерпания времени ожидания
+			logger.Log.Error("Shutdown timed out, forcing exit")
 			os.Exit(1)
 		}
 	}()
 
 	err := a.stop(shutdownCtx)
 	if err != nil {
+		// Логирование ошибки при попытке остановить сервер
+		logger.Log.Error("Error during server shutdown", zap.Error(err))
 		os.Exit(1)
 	}
 
-	serverStopCtx()
-	shutdownStopCtx()
+	// Логирование успешного завершения процесса остановки
+	logger.Log.Info("Server shutdown completed successfully")
+	serverStopCtx()   // Остановка контекста сервера
+	shutdownStopCtx() // Остановка контекста тайм-аута
 }
