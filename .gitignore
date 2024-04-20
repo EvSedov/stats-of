@@ -20,7 +20,5 @@ vendor/
 # Go workspace file
 go.work
 
-docker-compose.yml
 internal/logger/logs
 mytestfiles
-internal/storagetestsutils
