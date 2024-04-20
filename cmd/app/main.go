@@ -14,8 +14,4 @@ func main() {
 	if err := app.RunApp(); err != nil {
 		logger.Log.Fatal("Error occurred", zap.Error(err))
 	}
-
-	// if err := storagetestsutils.HandleCsvToDb(); err != nil {
-	// 	logger.Log.Fatal("Error processing CSV data", zap.Error(err))
-	// }
 }
