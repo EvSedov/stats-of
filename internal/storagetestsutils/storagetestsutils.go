@@ -2,13 +2,17 @@ package storagetestsutils
 
 import (
 	"bufio"
+	"context"
 	"encoding/csv"
+	"fmt"
 	"io"
 	"os"
 	"stats-of/internal/logger"
 	"strconv"
+	"sync"
+	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
@@ -52,14 +56,16 @@ func InitDb() *redis.Client {
 		DB:       db, // Используем преобразованное значение
 	})
 
-	// Выполняем команду PING
-	pong, err := rdb.Ping().Result()
+	// Создаем контекст для вызова метода Ping
+	ctx := context.Background()
+
+	// Выполняем команду PING с контекстом
+	pong, err := rdb.Ping(ctx).Result()
 	if err != nil {
 		logger.Log.Info("Ошибка при подключении к Redis", zap.Error(err))
+	} else {
+		logger.Log.Info("Ответ от Redis:", zap.String("response", pong))
 	}
-
-	// Logging with zap
-	logger.Log.Info("Ответ от Redis:", zap.String("response", pong))
 
 	return rdb
 }
@@ -133,6 +139,8 @@ func (m *CsvDbManager) ReadCsvData(rowLimit int) ([][]string, error) {
 
 // AddDataToDb добавляет данные из слайса слайсов строк в базу данных Redis.
 func (m *CsvDbManager) AddDataToDb(records [][]string) error {
+	ctx := context.Background() // Создаем контекст для операций с Redis
+
 	for _, record := range records {
 		chatID := record[0]
 		user := record[1]
@@ -142,7 +150,8 @@ func (m *CsvDbManager) AddDataToDb(records [][]string) error {
 		key := "chat:" + chatID + ":user:" + user + ":type:" + messageType
 		value := lastMsgEvent
 
-		err := m.RedisClient.Set(key, value, 0).Err() // Assuming you want the key to never expire.
+		// Использование context.Background() и time.Duration(0) для установки ключей без истечения срока действия
+		err := m.RedisClient.Set(ctx, key, value, 0*time.Second).Err()
 		if err != nil {
 			return err
 		}
@@ -182,7 +191,7 @@ func HandleCsvToDb() error {
 	rdb := InitDb()
 
 	filePath := "/home/sergey/Development/Sfera/testmeetdb/asap/Result_1.csv"
-	rowLimit := 100000
+	rowLimit := 150000
 
 	manager := NewCsvDbManager(filePath, rdb)
 
@@ -199,5 +208,29 @@ func HandleCsvToDb() error {
 	}
 
 	logger.Log.Info("Данные успешно добавлены в базу данных")
+	return nil
+}
+
+// AddUsersData использует горутины для параллельной записи данных пользователей в Redis.
+func (m *CsvDbManager) AddUsersData(userCount int) error {
+	var wg sync.WaitGroup
+	wg.Add(userCount)
+
+	for i := 0; i < userCount; i++ {
+		go func(userID int) {
+			defer wg.Done()
+			key := fmt.Sprintf("chat:5481:user:%d:type:CHANNEL", 121000000+userID)
+			value := time.Now().Format("2006-01-02 15:04:05.000000 +00:00")
+			err := m.RedisClient.Set(context.Background(), key, value, 0).Err() // Assuming you want the key to never expire.
+			if err != nil {
+				logger.Log.Error("Error setting value for user", zap.Int("userID", userID), zap.Error(err))
+			} else {
+				logger.Log.Info("Value set for user", zap.Int("userID", userID))
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	logger.Log.Info("All goroutines have finished executing")
 	return nil
 }
