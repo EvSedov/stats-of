@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"stats-of/internal/logger"
 	"strconv"
 )
 
@@ -28,4 +29,17 @@ func LoadFromEnv() (*Config, error) {
 	}
 
 	return conf, nil
+}
+
+func InitConfig() *Config {
+	logger.InitLogger()
+	logger.Log.Info("reading config...")
+
+	config, err := LoadFromEnv()
+	if err != nil {
+		logger.Log.Info("failed to read config")
+		os.Exit(1)
+	}
+
+	return config
 }
