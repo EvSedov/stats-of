@@ -1,6 +1,7 @@
 package main
 
 import (
+	"stats-of/internal/app"
 	"stats-of/internal/logger"
 	"stats-of/internal/storagetestsutils"
 
@@ -11,28 +12,33 @@ func main() {
 	logger.InitLogger()
 	logger.Log.Info("Starting application and reading configuration...")
 
-	// if err := app.RunApp(); err != nil {
-	// 	logger.Log.Fatal("Error occurred", zap.Error(err))
-	// }
+	// Launching the application - can be commented out to just add data to the database
+	if err := app.RunApp(); err != nil {
+		logger.Log.Fatal("Error occurred", zap.Error(err))
+	}
+	// ------------------------------------------------
 
+	// Initializing database connection - block for adding data from CSV to the database
 	if err := storagetestsutils.HandleCsvToDb(); err != nil {
 		logger.Log.Fatal("Error processing CSV data", zap.Error(err))
 	}
+	// ------------------------------------------------
 
-	// Инициализация подключения к Redis
+	// Initializing connection to Redis - block for adding test data for Redis stress testing
 	redisClient := storagetestsutils.InitDb()
 	if redisClient == nil {
 		logger.Log.Fatal("Failed to initialize Redis client", zap.String("reason", "client is nil"))
 	}
 
-	// Создание экземпляра CsvDbManager
-	manager := storagetestsutils.NewCsvDbManager("", redisClient) // Путь к файлу не используется в данном контексте
+	// Creating an instance of CsvDbManager
+	manager := storagetestsutils.NewCsvDbManager("", redisClient) // File path is not used in this context
 
-	// Вызов AddUsersData с желаемым количеством пользователей
-	userCount := 50000 // Примерное количество пользователей для теста
+	// Calling AddUsersData with the desired number of users
+	userCount := 50000 // Approximate number of users for the test
 	if err := manager.AddUsersData(userCount); err != nil {
 		logger.Log.Fatal("Error adding user data", zap.Error(err))
 	}
 
 	logger.Log.Info("Data successfully added for users")
+	// ------------------------------------------------
 }
