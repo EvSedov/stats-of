@@ -139,24 +139,53 @@ func (m *CsvDbManager) ReadCsvData(rowLimit int) ([][]string, error) {
 
 // AddDataToDb добавляет данные из слайса слайсов строк в базу данных Redis.
 func (m *CsvDbManager) AddDataToDb(records [][]string) error {
-	ctx := context.Background() // Создаем контекст для операций с Redis
+	ctx := context.Background()
+	logger.Log.Info("Начало добавления данных в базу", zap.Int("totalRecords", len(records)))
 
-	for _, record := range records {
+	for index, record := range records {
 		chatID := record[0]
 		user := record[1]
-		messageType := record[2]
 		lastMsgEvent := record[3]
 
-		key := "chat:" + chatID + ":user:" + user + ":type:" + messageType
-		value := lastMsgEvent
+		userKey := "user:" + user
+		userChatsKey := "user:" + user + ":chats"
+		chatKey := "chat:" + chatID
 
-		// Использование context.Background() и time.Duration(0) для установки ключей без истечения срока действия
-		err := m.RedisClient.Set(ctx, key, value, 0*time.Second).Err()
-		if err != nil {
+		// Сначала проверяем текущее значение lastMsgEvent для чата
+		currentLastEvent, err := m.RedisClient.HGet(ctx, chatKey, "lastMsgEvent").Result()
+		if err != nil && err != redis.Nil {
+			logger.Log.Error("Ошибка при получении текущего lastMsgEvent для чата", zap.String("chatKey", chatKey), zap.Error(err))
 			return err
 		}
+		// Обновляем lastMsgEvent для чата, если новое событие позднее
+		if err == redis.Nil || currentLastEvent < lastMsgEvent {
+			if err := m.RedisClient.HSet(ctx, chatKey, "lastMsgEvent", lastMsgEvent).Err(); err != nil {
+				logger.Log.Error("Ошибка при обновлении последнего события в чате", zap.String("chatKey", chatKey), zap.Error(err))
+				return err
+			}
+		}
+		// Затем обновляем информацию о последней активности пользователя
+		if err := m.RedisClient.HSet(ctx, userKey, "lastMsgEvent", lastMsgEvent, "lastChatID", chatID).Err(); err != nil {
+			logger.Log.Error("Ошибка при обновлении информации пользователя", zap.String("userKey", userKey), zap.Error(err))
+			return err
+		}
+		// Добавляем чат в список чатов пользователя
+		if err := m.RedisClient.SAdd(ctx, userChatsKey, chatID).Err(); err != nil {
+			logger.Log.Error("Ошибка при добавлении чата в список чатов пользователя", zap.String("userChatsKey", userChatsKey), zap.Error(err))
+			return err
+		}
+
+		// Для каждого пользователя добавляем его в множество чата
+		chatUsersKey := "chat:" + chatID + ":users"
+		if err := m.RedisClient.SAdd(ctx, chatUsersKey, user).Err(); err != nil {
+			logger.Log.Error("Ошибка при добавлении пользователя в список пользователей чата", zap.String("chatUsersKey", chatUsersKey), zap.Error(err))
+			return err
+		}
+
+		logger.Log.Info("Данные пользователя обработаны", zap.Int("recordIndex", index+1))
 	}
 
+	logger.Log.Info("Все данные успешно обновлены в базе")
 	return nil
 }
 
