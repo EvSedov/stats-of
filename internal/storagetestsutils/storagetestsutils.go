@@ -148,37 +148,47 @@ func (m *CsvDbManager) AddDataToDb(records [][]string) error {
 		lastMsgEvent := record[3]
 
 		userKey := "user:" + user
-		userChatsKey := "user:" + user + ":chats"
 		chatKey := "chat:" + chatID
+		chatUsersKey := "chat:" + chatID + ":users"
 
-		// Сначала проверяем текущее значение lastMsgEvent для чата
-		currentLastEvent, err := m.RedisClient.HGet(ctx, chatKey, "lastMsgEvent").Result()
+		// Обновляем данные чата, если новое сообщение позднее последнего зарегистрированного
+		currentLastEvent, err := m.RedisClient.HGet(ctx, chatKey, "last_msg_time").Result()
 		if err != nil && err != redis.Nil {
-			logger.Log.Error("Ошибка при получении текущего lastMsgEvent для чата", zap.String("chatKey", chatKey), zap.Error(err))
+			logger.Log.Error("Ошибка при получении последнего времени сообщения для чата", zap.String("chatKey", chatKey), zap.Error(err))
 			return err
 		}
-		// Обновляем lastMsgEvent для чата, если новое событие позднее
+
 		if err == redis.Nil || currentLastEvent < lastMsgEvent {
-			if err := m.RedisClient.HSet(ctx, chatKey, "lastMsgEvent", lastMsgEvent).Err(); err != nil {
+			// Обновляем время последнего сообщения в чате
+			if err := m.RedisClient.HSet(ctx, chatKey, "last_msg_time", lastMsgEvent, "last_user_id", user).Err(); err != nil {
 				logger.Log.Error("Ошибка при обновлении последнего события в чате", zap.String("chatKey", chatKey), zap.Error(err))
 				return err
 			}
-		}
-		// Затем обновляем информацию о последней активности пользователя
-		if err := m.RedisClient.HSet(ctx, userKey, "lastMsgEvent", lastMsgEvent, "lastChatID", chatID).Err(); err != nil {
-			logger.Log.Error("Ошибка при обновлении информации пользователя", zap.String("userKey", userKey), zap.Error(err))
-			return err
-		}
-		// Добавляем чат в список чатов пользователя
-		if err := m.RedisClient.SAdd(ctx, userChatsKey, chatID).Err(); err != nil {
-			logger.Log.Error("Ошибка при добавлении чата в список чатов пользователя", zap.String("userChatsKey", userChatsKey), zap.Error(err))
-			return err
+			// Добавляем пользователя в список пользователей чата
+			err := m.RedisClient.SAdd(ctx, chatUsersKey, user).Err()
+			if err != nil {
+				logger.Log.Error("Ошибка при добавлении пользователя в список пользователей чата", zap.String("chatUsersKey", chatUsersKey), zap.Error(err))
+				return err
+			}
 		}
 
-		// Для каждого пользователя добавляем его в множество чата
-		chatUsersKey := "chat:" + chatID + ":users"
-		if err := m.RedisClient.SAdd(ctx, chatUsersKey, user).Err(); err != nil {
-			logger.Log.Error("Ошибка при добавлении пользователя в список пользователей чата", zap.String("chatUsersKey", chatUsersKey), zap.Error(err))
+		// Обновляем данные пользователя
+		currentLastChatID, err := m.RedisClient.HGet(ctx, userKey, "last_chat_id").Result()
+		if err == redis.Nil || currentLastChatID != chatID {
+			// Присваиваем результат вызова HSet переменной err
+			err = m.RedisClient.HSet(ctx, userKey, "last_active", lastMsgEvent, "last_chat_id", chatID).Err()
+			// Проверяем, есть ли ошибка после присваивания
+			if err != nil {
+				logger.Log.Error("Ошибка при обновлении информации пользователя", zap.String("userKey", userKey), zap.Error(err))
+				return err
+			}
+		}
+
+		// Обновляем список чатов пользователя
+		err = m.RedisClient.SAdd(ctx, userKey+":chats", chatID).Err()
+		// Проверка наличия ошибки
+		if err != nil {
+			logger.Log.Error("Ошибка при добавлении чата в список чатов пользователя", zap.String("userKey", userKey+":chats"), zap.Error(err))
 			return err
 		}
 
