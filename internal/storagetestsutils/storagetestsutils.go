@@ -31,43 +31,39 @@ func NewCsvDbManager(filePath string, redisClient *redis.Client) *CsvDbManager {
 	}
 }
 
-func InitDb() *redis.Client {
+func InitDb() (*redis.Client, error) {
 	// Загрузка переменных из файла .env
-	err := godotenv.Load()
-	if err != nil {
-		logger.Log.Fatal("Ошибка при загрузке файла .env", zap.Error(err))
+	if err := godotenv.Load(); err != nil {
+		return nil, fmt.Errorf("ошибка при загрузке файла .env: %v", err)
 	}
 
 	// Получение конфигурации из переменных окружения
 	addr := os.Getenv("REDIS_ADDR")
 	password := os.Getenv("REDIS_PASSWORD")
-	dbStr := os.Getenv("REDIS_DB") // Получаем значение как строку
+	dbStr := os.Getenv("REDIS_DB")
 
 	// Преобразуем значение DB из строки в число
 	db, err := strconv.Atoi(dbStr)
 	if err != nil {
-		logger.Log.Fatal("Ошибка при преобразовании REDIS_DB в число", zap.Error(err))
+		return nil, fmt.Errorf("ошибка при преобразовании REDIS_DB в число: %v", err)
 	}
 
 	// Создаем новый клиент Redis с использованием переменных окружения
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: password,
-		DB:       db, // Используем преобразованное значение
+		DB:       db,
 	})
 
 	// Создаем контекст для вызова метода Ping
 	ctx := context.Background()
 
 	// Выполняем команду PING с контекстом
-	pong, err := rdb.Ping(ctx).Result()
-	if err != nil {
-		logger.Log.Info("Ошибка при подключении к Redis", zap.Error(err))
-	} else {
-		logger.Log.Info("Ответ от Redis:", zap.String("response", pong))
+	if _, err := rdb.Ping(ctx).Result(); err != nil {
+		return nil, fmt.Errorf("ошибка при подключении к Redis: %v", err)
 	}
 
-	return rdb
+	return rdb, nil
 }
 
 // CountCsvRows подсчитывает количество строк в CSV файле.
@@ -148,46 +144,22 @@ func (m *CsvDbManager) AddDataToDb(records [][]string) error {
 		lastMsgEvent := record[3]
 
 		userKey := "user:" + user
-		chatKey := "chat:" + chatID
 		chatUsersKey := "chat:" + chatID + ":users"
 
-		// Обновляем данные чата, если новое сообщение позднее последнего зарегистрированного
-		currentLastEvent, err := m.RedisClient.HGet(ctx, chatKey, "last_msg_time").Result()
-		if err != nil && err != redis.Nil {
-			logger.Log.Error("Ошибка при получении последнего времени сообщения для чата", zap.String("chatKey", chatKey), zap.Error(err))
+		// Добавляем пользователя в список пользователей чата
+		if err := m.RedisClient.SAdd(ctx, chatUsersKey, user).Err(); err != nil {
+			logger.Log.Error("Ошибка при добавлении пользователя в список пользователей чата", zap.String("chatUsersKey", chatUsersKey), zap.Error(err))
 			return err
 		}
 
-		if err == redis.Nil || currentLastEvent < lastMsgEvent {
-			// Обновляем время последнего сообщения в чате
-			if err := m.RedisClient.HSet(ctx, chatKey, "last_msg_time", lastMsgEvent, "last_user_id", user).Err(); err != nil {
-				logger.Log.Error("Ошибка при обновлении последнего события в чате", zap.String("chatKey", chatKey), zap.Error(err))
-				return err
-			}
-			// Добавляем пользователя в список пользователей чата
-			err := m.RedisClient.SAdd(ctx, chatUsersKey, user).Err()
-			if err != nil {
-				logger.Log.Error("Ошибка при добавлении пользователя в список пользователей чата", zap.String("chatUsersKey", chatUsersKey), zap.Error(err))
-				return err
-			}
-		}
-
 		// Обновляем данные пользователя
-		currentLastChatID, err := m.RedisClient.HGet(ctx, userKey, "last_chat_id").Result()
-		if err == redis.Nil || currentLastChatID != chatID {
-			// Присваиваем результат вызова HSet переменной err
-			err = m.RedisClient.HSet(ctx, userKey, "last_active", lastMsgEvent, "last_chat_id", chatID).Err()
-			// Проверяем, есть ли ошибка после присваивания
-			if err != nil {
-				logger.Log.Error("Ошибка при обновлении информации пользователя", zap.String("userKey", userKey), zap.Error(err))
-				return err
-			}
+		if err := m.RedisClient.HSet(ctx, userKey, "last_active", lastMsgEvent, "last_chat_id", chatID).Err(); err != nil {
+			logger.Log.Error("Ошибка при обновлении информации пользователя", zap.String("userKey", userKey), zap.Error(err))
+			return err
 		}
 
 		// Обновляем список чатов пользователя
-		err = m.RedisClient.SAdd(ctx, userKey+":chats", chatID).Err()
-		// Проверка наличия ошибки
-		if err != nil {
+		if err := m.RedisClient.SAdd(ctx, userKey+":chats", chatID).Err(); err != nil {
 			logger.Log.Error("Ошибка при добавлении чата в список чатов пользователя", zap.String("userKey", userKey+":chats"), zap.Error(err))
 			return err
 		}
@@ -227,7 +199,11 @@ func (m *CsvDbManager) ReadCsvHeaders() ([]string, error) {
 
 // handleCsvToDb initializes the database, reads CSV data, and stores it in the database.
 func HandleCsvToDb() error {
-	rdb := InitDb()
+	rdb, err := InitDb()
+	if err != nil {
+		logger.Log.Error("Не удалось инициализировать базу данных", zap.Error(err))
+		return err
+	}
 
 	filePath := "/home/sergey/Development/Sfera/testmeetdb/asap/Result_1.csv"
 	rowLimit := 150000
@@ -271,5 +247,55 @@ func (m *CsvDbManager) AddUsersData(userCount int) error {
 
 	wg.Wait()
 	logger.Log.Info("All goroutines have finished executing")
+	return nil
+}
+
+func (m *CsvDbManager) FindChatsWithMinUsers(minUsers int64) ([]string, error) {
+	ctx := context.Background()
+	var cursor uint64
+	chatIDs := []string{}
+
+	for {
+		var keys []string
+		var err error
+		keys, cursor, err = m.RedisClient.Scan(ctx, cursor, "chat:*:users", 0).Result()
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range keys {
+			count, err := m.RedisClient.SCard(ctx, key).Result()
+			if err != nil {
+				return nil, err
+			}
+			if count >= minUsers { // Сравнение с заданным минимальным количеством пользователей
+				chatID := key[len("chat:") : len(key)-len(":users")]
+				chatIDs = append(chatIDs, chatID)
+			}
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+	return chatIDs, nil
+}
+
+func RunChatSearch(minUsers int64) error {
+	redisClient, err := InitDb()
+	if err != nil {
+		return fmt.Errorf("failed to initialize Redis client: %v", err)
+	}
+
+	// Создание экземпляра CsvDbManager
+	manager := NewCsvDbManager("", redisClient) // Предполагаем, что FilePath не требуется
+
+	// Получение списка чатов с минимальным количеством пользователей
+	minUsers = int64(10)
+	chatIDs, err := manager.FindChatsWithMinUsers(minUsers)
+	if err != nil {
+		return fmt.Errorf("error retrieving chat IDs: %v", err)
+	}
+
+	// Вывод полученного списка чатов
+	logger.Log.Info("Output of chat list with the specified minimum number of users", zap.Int64("minUsers", minUsers), zap.Strings("chatIDs", chatIDs))
 	return nil
 }
