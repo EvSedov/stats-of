@@ -289,7 +289,6 @@ func RunChatSearch(minUsers int64) error {
 	manager := NewCsvDbManager("", redisClient) // Предполагаем, что FilePath не требуется
 
 	// Получение списка чатов с минимальным количеством пользователей
-	minUsers = int64(10)
 	chatIDs, err := manager.FindChatsWithMinUsers(minUsers)
 	if err != nil {
 		return fmt.Errorf("error retrieving chat IDs: %v", err)
