@@ -302,38 +302,48 @@ func RunChatSearch(minUsers int64) error {
 
 func (m *CsvDbManager) GetUsersByChatCount(targetChatCount int64) ([]string, error) {
 	ctx := context.Background()
-
-	// Получаем всех пользователей
-	keys, err := m.RedisClient.Keys(ctx, "user:*:chats").Result()
-	if err != nil {
-		logger.Log.Error("Ошибка при получении ключей пользователей", zap.Error(err))
-		return nil, err
-	}
-
 	var userIdsWithTargetChatCount []string
 
-	// Проходим по каждому ключу и проверяем количество чатов
-	for _, key := range keys {
-		chatCount, err := m.RedisClient.SCard(ctx, key).Result()
+	// Инициализируем курсор для сканирования ключей
+	var cursor uint64
+	var err error
+	var keys []string
+
+	// Используем SCAN в цикле
+	for {
+		// Scan возвращает новый курсор и порцию ключей
+		keys, cursor, err = m.RedisClient.Scan(ctx, cursor, "user:*:chats", 0).Result()
 		if err != nil {
-			logger.Log.Error("Ошибка при получении размера множества", zap.String("key", key), zap.Error(err))
-			continue // Пропускаем в случае ошибки
+			logger.Log.Error("Ошибка при сканировании ключей пользователей", zap.Error(err))
+			return nil, err
 		}
 
-		// Проверяем, соответствует ли количество чатов заданному
-		if chatCount == targetChatCount {
-			// Извлекаем идентификатор пользователя из ключа
-			// Предполагается, что ключ имеет формат "user:<user_id>:chats"
-			parts := strings.Split(key, ":")
-			if len(parts) > 1 {
-				userId := parts[1]
-				userIdsWithTargetChatCount = append(userIdsWithTargetChatCount, userId)
+		// Обрабатываем каждый ключ
+		for _, key := range keys {
+			chatCount, err := m.RedisClient.SCard(ctx, key).Result()
+			if err != nil {
+				logger.Log.Error("Ошибка при получении размера множества", zap.String("key", key), zap.Error(err))
+				continue // Пропускаем в случае ошибки
 			}
+
+			// Проверяем, соответствует ли количество чатов заданному
+			if chatCount == targetChatCount {
+				// Извлекаем идентификатор пользователя из ключа
+				parts := strings.Split(key, ":")
+				if len(parts) > 1 {
+					userId := parts[1]
+					userIdsWithTargetChatCount = append(userIdsWithTargetChatCount, userId)
+				}
+			}
+		}
+
+		// Если курсор равен 0, мы обработали все ключи
+		if cursor == 0 {
+			break
 		}
 	}
 
 	logger.Log.Info("Пользователи с заданным количеством чатов найдены", zap.Int64("targetChatCount", targetChatCount), zap.Strings("userIds", userIdsWithTargetChatCount))
-
 	return userIdsWithTargetChatCount, nil
 }
 
