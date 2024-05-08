@@ -29,4 +29,6 @@ func main() {
 	// ------------------------------------------------
 
 	storagetestsutils.RunChatSearch(10)
+
+	storagetestsutils.RunUserSearch(11)
 }

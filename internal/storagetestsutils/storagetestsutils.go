@@ -9,6 +9,7 @@ import (
 	"os"
 	"stats-of/internal/logger"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -296,5 +297,63 @@ func RunChatSearch(minUsers int64) error {
 
 	// Вывод полученного списка чатов
 	logger.Log.Info("Output of chat list with the specified minimum number of users", zap.Int64("minUsers", minUsers), zap.Strings("chatIDs", chatIDs))
+	return nil
+}
+
+func (m *CsvDbManager) GetUsersByChatCount(targetChatCount int64) ([]string, error) {
+	ctx := context.Background()
+
+	// Получаем всех пользователей
+	keys, err := m.RedisClient.Keys(ctx, "user:*:chats").Result()
+	if err != nil {
+		logger.Log.Error("Ошибка при получении ключей пользователей", zap.Error(err))
+		return nil, err
+	}
+
+	var userIdsWithTargetChatCount []string
+
+	// Проходим по каждому ключу и проверяем количество чатов
+	for _, key := range keys {
+		chatCount, err := m.RedisClient.SCard(ctx, key).Result()
+		if err != nil {
+			logger.Log.Error("Ошибка при получении размера множества", zap.String("key", key), zap.Error(err))
+			continue // Пропускаем в случае ошибки
+		}
+
+		// Проверяем, соответствует ли количество чатов заданному
+		if chatCount == targetChatCount {
+			// Извлекаем идентификатор пользователя из ключа
+			// Предполагается, что ключ имеет формат "user:<user_id>:chats"
+			parts := strings.Split(key, ":")
+			if len(parts) > 1 {
+				userId := parts[1]
+				userIdsWithTargetChatCount = append(userIdsWithTargetChatCount, userId)
+			}
+		}
+	}
+
+	logger.Log.Info("Пользователи с заданным количеством чатов найдены", zap.Int64("targetChatCount", targetChatCount), zap.Strings("userIds", userIdsWithTargetChatCount))
+
+	return userIdsWithTargetChatCount, nil
+}
+
+func RunUserSearch(targetChatCount int64) error {
+	redisClient, err := InitDb()
+	if err != nil {
+		return fmt.Errorf("failed to initialize Redis client: %v", err)
+	}
+
+	// Создание экземпляра CsvDbManager
+	manager := NewCsvDbManager("", redisClient) // Предполагаем, что FilePath не требуется
+
+	// Получение списка пользователей
+	userIds, err := manager.GetUsersByChatCount(targetChatCount)
+	if err != nil {
+		logger.Log.Error("Ошибка при получении списка пользователей по количеству чатов", zap.Error(err))
+		return err
+	}
+
+	logger.Log.Info("Output of user list with the specified number of chats", zap.Int64("targetChatCount", targetChatCount), zap.Strings("userIds", userIds))
+
 	return nil
 }
